@@ -2,6 +2,12 @@ library(googlesheets)
 library(dplyr)
 library(twitteR)
 
+# TO DO 15.12.2017
+# Edit to reflect what's been done after the first round
+# - process only rows after the last 'Done up to here' line
+# - rbind with the older data set
+# - add a new 'Done up to here' line
+
 # Read sheet data from GDrive
 my_sheets <- gs_ls()
 
