@@ -1,7 +1,7 @@
 library(shiny)
 library(dygraphs)
 library(xts)
-library(dplyr)
+library(tidyverse)
 library(DT)
 
 shinyApp(
@@ -28,8 +28,15 @@ shinyApp(
   
   server = function(input, output) {
     
-    twdata <- read.csv("to_app.csv", stringsAsFactors = F)
-  
+    twdata <- read.csv("to_app_data.csv",
+                     stringsAsFactors = FALSE)
+
+    twdata$date <- as.Date(twdata$date, "%Y-%m-%d")
+    
+    # Because emojis are broken (IFTTT cannot handle them),
+    # replacing all <.*> with empty string
+    twdata$text <- gsub("<.*>", "", twdata$text)
+    
     # Prepare dygraph object
     # Fill in missing dates
     # http://stackoverflow.com/a/31484550
@@ -70,6 +77,7 @@ shinyApp(
                show = "follow",
                hideOnMouseOut = FALSE)
     
+    
     output$dg <- renderDygraph({
       
       dygraph_plot
@@ -77,19 +85,21 @@ shinyApp(
       })
     
     
-    output$datatable <- DT::renderDataTable({
+    # Prepare tweet status data for DT table rendering
+    twdata$avatar <- sapply(twdata$tweet, function(x) strsplit(x, "/")[[1]][4])
+    
+    twdata <- twdata %>% 
+      mutate(Link = paste0('<a href="', tweet, '">', avatar, '</a>')) %>% 
+      rename(Date = date,
+             Status = text) %>% 
+      select(Link, Date, Status)
+  
       
-      twdata <- twdata %>% 
-        rowwise() %>% 
-        mutate(avatar = strsplit(tweet, "/")[[1]][4],
-               Link = paste0('<a href="', tweet, '">', avatar, "</a>"),
-               Status = iconv(text, from = "ISO-8859-1", to = "UTF-8")) %>% 
-        rename(Date = date) %>% 
-        select(Link, Date, Status)
+    output$datatable <- DT::renderDataTable({
       
       twdata
       
-      }, escape = FALSE, options = list(scrollX = T))
+      }, escape = FALSE)
     
   }
 )
