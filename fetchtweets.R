@@ -1,5 +1,5 @@
 library(googlesheets)
-library(dplyr)
+library(tidyverse)
 library(twitteR)
 
 # Read sheet data from GDrive
