@@ -130,11 +130,11 @@ to_app <- newfavs %>%
 
 # Merge with previous sets
 # TO DO: read all files based on name, here still just one
-olderfavs <- read.csv("to_app.csv", stringsAsFactors = F)
+olderfavs <- read.csv("to_app_data.csv", stringsAsFactors = F)
 olderfavs$date = as.Date(olderfavs$date, "%Y-%m-%d")
 
 to_app_all <- rbind(olderfavs, to_app)
-write.csv(to_app_all, paste0("to_app_all", Sys.Date(), ".csv"), row.names = FALSE)  
+write.csv(to_app_all, "to_app_data.csv", row.names = FALSE)  
 
 #################################################################
 #
