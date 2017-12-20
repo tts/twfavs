@@ -2,19 +2,12 @@ library(googlesheets)
 library(dplyr)
 library(twitteR)
 
-# TO DO 15.12.2017
-# Edit to reflect what's been done after the first round
-# - process only rows after the last 'Done up to here' line
-# - rbind with the older data set
-# - add a new 'Done up to here' line
-
 # Read sheet data from GDrive
 my_sheets <- gs_ls()
 
 # With the sheet_key of all those rows 
 # where the sheet_title starts with 'New favorite tweet',
 # download all items
-
 fav_sheets <- my_sheets %>% 
   filter(grepl('New favorite tweet', sheet_title)) 
 
@@ -29,8 +22,33 @@ tweets_in_sheet <- function(key = NULL){
 tw_l <- lapply(fav_sheets$sheet_key, function(x) tweets_in_sheet(x))
 favs <- do.call(rbind, tw_l)
 
-# Extract Twitter status ID
+# We don't want to rerun rows we've already processed,
+# so first subset to those that come after the (last) one saying
+# "Done up to here"
+#
+# So first first, sort by date.
+#
+# Due to my initial mistake of using the default Win locale,
+# replacing that value here
+favs[favs$date == "kesäkuu 18, 2017 at 15:02",]$date <- "June 18, 2017 at 3:02PM"
+
+Sys.setlocale("LC_TIME", "English")
+
 favs <- favs %>% 
+  rowwise() %>% 
+  mutate(date = as.Date(date, "%B %d, %Y")) %>% 
+  arrange(date) 
+
+doneuptohere_rows <- which(grepl("^Done up to here$", favs$ifttt))
+last_doneuptohere_row <- doneuptohere_rows[length(doneuptohere_rows)]
+firstnewrow <- last_doneuptohere_row + 1
+
+# Take the newest rows only
+newfavs <- favs %>% 
+  slice(firstnewrow:n())
+
+# Extract Twitter status ID
+newfavs <- newfavs %>% 
   mutate(statusid = sapply(url, function(x) { strsplit(x,"/")[[1]][6] }))
 
 # https://www.r-bloggers.com/unshorten-urls-in-r/
@@ -60,13 +78,12 @@ getLongURL.curl <- function(shorturl){
   return(newurl)
 }
 
-# If the url is a short one, expand it, and extract ID
-favs <- favs %>% 
+newfavs <- newfavs %>% 
   rowwise() %>% 
   mutate(longurl = if( is.na(statusid) )  getLongURL.curl(url) else url ) %>% 
   mutate(id = sapply(longurl, function(x) { strsplit(x,"/")[[1]][6] }))
 
-write.csv(favs, "favs.csv", row.names = F)
+write.csv(favs, paste0("favs", Sys.Date(), ".csv"), row.names = F)
 
 ##########################
 #
@@ -80,42 +97,44 @@ my_access_token <- ""
 my_access_secret <- ""
 setup_twitter_oauth(my_key, my_secret, my_access_token, my_access_secret)
 
-favs$id <- as.character(favs$id)
+newfavs$id <- as.character(newfavs$id)
 
 # Sys.sleep to deal with rate limits
 # https://dev.twitter.com/rest/public/rate-limits
-for (i in 1:nrow(favs)){
-  message("Getting text to ", favs$id[i], "\r")
+for (i in 1:nrow(newfavs)){
+  message("Getting text to ", newfavs$id[i], "\r")
   flush.console()
 
   tryCatch({
-    favs$statustext[i] <- showStatus(favs$id[i])$text
+    newfavs$statustext[i] <- showStatus(newfavs$id[i])$text
   }, error = function(e){
     message(':(')
   })
   Sys.sleep(1)
 }
 
-write.csv(favs, "favs_with_status.csv", row.names = FALSE)
+write.csv(newfavs, paste0("favs_with_status", Sys.Date(), ".csv"), row.names = FALSE)
 
-#############################################
+###########################
 #
 # To the app
 #
 # "tweet","date","text"
 #
-#############################################
+###########################
 
-Sys.setlocale("LC_TIME", "C")
-
-to_app <- favs %>% 
+to_app <- newfavs %>% 
   rename(tweet = longurl,
          text = statustext) %>%
-  mutate(date_ext = gsub("(.*) at.*", "\\1", date), 
-         date = as.Date(date_ext, "%B %d, %Y")) %>% 
   select(tweet, date, text)
 
-write.csv(to_app, "to_app.csv", row.names = FALSE)  
+# Merge with previous sets
+# TO DO: read all files based on name, here still just one
+olderfavs <- read.csv("to_app.csv", stringsAsFactors = F)
+olderfavs$date = as.Date(olderfavs$date, "%Y-%m-%d")
+
+to_app_all <- rbind(olderfavs, to_app)
+write.csv(to_app_all, paste0("to_app_all", Sys.Date(), ".csv"), row.names = FALSE)  
 
 #################################################################
 #
